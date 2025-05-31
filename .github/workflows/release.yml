@@ -1,0 +1,148 @@
+name: Build and Release Activity Monitor
+
+on:
+  push:
+    tags:
+      - 'v*'  # Uruchamia się przy tagach zaczynających się od 'v' (np. v1.0.0)
+  workflow_dispatch:  # Pozwala na ręczne uruchomienie
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+
+    - name: Build Windows executable
+      run: |
+        pyinstaller --onefile --windowed --name="ActivityMonitor-Windows" main.py
+
+    - name: Upload Windows artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: ActivityMonitor-Windows
+        path: dist/ActivityMonitor-Windows.exe
+
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y python3-tk python3-dev
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+
+    - name: Build Linux executable
+      run: |
+        pyinstaller --onefile --name="ActivityMonitor-Linux" main.py
+
+    - name: Upload Linux artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: ActivityMonitor-Linux
+        path: dist/ActivityMonitor-Linux
+
+  create-release:
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download Windows artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: ActivityMonitor-Windows
+        path: ./dist/
+
+    - name: Download Linux artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: ActivityMonitor-Linux
+        path: ./dist/
+
+    - name: Get release version
+      id: get_version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.get_version.outputs.VERSION }}
+        name: Activity Monitor ${{ steps.get_version.outputs.VERSION }}
+        body: |
+          ## Activity Monitor ${{ steps.get_version.outputs.VERSION }}
+          
+          ### 🚀 Nowa wersja Activity Monitor!
+          
+          **Co nowego:**
+          - Monitorowanie aktywności użytkownika
+          - Wykrywanie okresów bezczynności
+          - Eksport raportów do CSV i TXT
+          - Intuicyjny interfejs graficzny
+          
+          ### 📥 Pobierz dla swojego systemu:
+          
+          - **Windows**: `ActivityMonitor-Windows.exe`
+          - **Linux**: `ActivityMonitor-Linux`
+          
+          ### 🔧 Instrukcja:
+          
+          1. Pobierz odpowiedni plik dla swojego systemu
+          2. Uruchom aplikację (może wymagać uprawnień administratora)
+          3. Kliknij "Rozpocznij monitorowanie"
+          4. Pracuj normalnie - aplikacja śledzi aktywność w tle
+          5. Eksportuj raporty według potrzeb
+          
+          ### ⚠️ Uwagi bezpieczeństwa:
+          
+          - Aplikacja może zostać oznaczona jako podejrzana przez antywirus (fałszywy alarm)
+          - Kod źródłowy jest dostępny publicznie do przeglądu
+          - Wszystkie dane pozostają lokalnie na Twoim komputerze
+          
+          ### 🐛 Zgłaszanie błędów:
+          
+          Jeśli napotkasz problemy, zgłoś je w sekcji [Issues](https://github.com/${{ github.repository }}/issues).
+          
+          ---
+          
+          **Checksums:**
+          ```
+          Windows: (będzie automatycznie wygenerowany)
+          Linux:   (będzie automatycznie wygenerowany)
+          ```
+        files: |
+          dist/ActivityMonitor-Windows.exe
+          dist/ActivityMonitor-Linux
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
